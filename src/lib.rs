@@ -177,6 +177,7 @@ mod cheburnet {
                         };
 
                         SEQ_DELTA.lock().unwrap().remove(&key);
+                        s
                     }
                 }
 
