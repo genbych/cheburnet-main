@@ -33,7 +33,7 @@ mod cheburnet {
     #[pyfunction]
     fn interception(domain: String, bias: usize) -> PyResult<Vec<u8>> {
 
-        let filter = "outbound and tcp.DstPort == 443 and tcp.PayloadLength > 0";
+        let filter = "outbound and tcp.DstPort == 80 and tcp.PayloadLength > 0";
         let flags = WinDivertFlags::default();
 
         let divert = WinDivert::network(filter, 1000, flags)
@@ -62,6 +62,7 @@ mod cheburnet {
 
             if found {
                 println!("Packet to target ({})", domain);
+                println!("Data: {:?}", &data_mut);
 
                 let mut tcp_header: *mut WINDIVERT_TCPHDR = std::ptr::null_mut();
                 let mut payload: *mut c_void = std::ptr::null_mut();
@@ -95,6 +96,7 @@ mod cheburnet {
 
                 let offset = (payload as usize) - (data_mut.as_ptr() as usize);
 
+                println!("Data (utf-8): {:?}", String::from_utf8_lossy( &data_mut[offset..offset+payload_len as usize].to_vec()));
                 println!("Headers for 0 to {} bytes", offset);
                 println!("TCP Header: {:?}", tcp_header);
                 println!("Payload Length: {}", payload_len);
@@ -169,3 +171,4 @@ mod cheburnet {
     }
 
 }
+

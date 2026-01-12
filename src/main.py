@@ -10,6 +10,6 @@ if os.path.exists(dll_path):
 
 from cheburnet import *
 
-list = interception("vk.com", 1)
+list = interception("neverssl.com", 1)
 
 print(list.decode('utf-8', errors='replace'))
