@@ -1,0 +1,16 @@
+[package]
+name = "cheburnet"
+version = "0.1.0"
+edition = "2024"
+
+
+[lib]
+name = "cheburnet"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = "0.27.0"
+pnet = "0.35.0"
+rayon = "1.11.0"
+windivert = "0.6.0"
+windivert-sys = "0.10.0"
