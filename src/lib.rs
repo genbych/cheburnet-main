@@ -165,10 +165,10 @@ mod cheburnet {
                 divert.send(&packet2).expect("Error for send packet");
                 println!("Packet 2 sent");
             }
+            }
+
+
 
         }
 
     }
-
-}
-
