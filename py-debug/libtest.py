@@ -10,7 +10,7 @@ if os.path.exists(dll_path):
 
 from cheburnet import *
 
-list = interception("www.youtube.com", 10)
+list = interception("www.youtube.com", 1)
 
 print(list.decode('utf-8', errors='replace'))
 
