@@ -67,7 +67,7 @@ mod cheburnet {
                     }
 
                 } else if !ipv6_header.is_null() {
-                    // В IPv6 поле ttl часто мапится на hop_limit в структуре
+
                     if (*ipv6_header).hop_limit == 121 {
                         divert.send(&packet).ok();
                         println!("121");
@@ -198,3 +198,5 @@ mod cheburnet {
         }
 
     }
+
+// Code by 0b101100110010011100110001001010
