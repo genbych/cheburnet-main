@@ -5,29 +5,14 @@ use pyo3::prelude::*;
 mod cheburnet {
     use pyo3::prelude::*;
     use rayon::prelude::*;
-    use std::env;
-    use std::mem::replace;
-    use pyo3::types::{PyBool, PyList};
     use windivert::prelude::*;
     use windivert_sys::{WinDivertHelperParsePacket};
-    use windivert_sys::header::{WINDIVERT_TCPHDR, WINDIVERT_IPHDR, WINDIVERT_IPV6HDR};
+    use windivert_sys::header::{ WINDIVERT_TCPHDR, WINDIVERT_IPHDR, WINDIVERT_IPV6HDR };
     use windivert_sys::ChecksumFlags;
-    use std::ptr::{null, null_mut};
+    use std::ptr::{ null_mut };
     use std::ffi::c_void;
-    use std::collections::HashMap;
-    use std::net::Ipv4Addr;
-    use std::sync::Mutex;
     use windivert_sys::*;
 
-
-
-    #[derive(Hash, Eq, PartialEq, Clone, Debug)]
-    struct FlowKey {
-        src: Ipv4Addr,
-        dst: Ipv4Addr,
-        sport: u16,
-        dport: u16,
-    }
 
 
 
@@ -59,7 +44,7 @@ mod cheburnet {
             let mut ipv6_header: *mut WINDIVERT_IPV6HDR = null_mut();
 
             unsafe {
-                // Обязательно передаем нули во все ненужные поля
+
                 WinDivertHelperParsePacket(
                     packet.data.as_ptr() as *const c_void,
                     packet.data.len() as u32,
@@ -133,17 +118,16 @@ mod cheburnet {
 
                 let safe_bias = if bias == 0 { 1 } else { bias };
 
-                // 1. СОЗДАЕМ ДАННЫЕ ДЛЯ ВТОРОГО ПАКЕТА (пока data_mut еще полный!)
+
                 let mut data2_vec = data_mut[0..offset].to_vec();
                 data2_vec.extend_from_slice(&data_mut[offset + safe_bias..]);
 
                 let mut packet2 = unsafe { WinDivertPacket::<NetworkLayer>::new(data2_vec) };
                 packet2.address = packet.address.clone();
 
-                // 2. ОБРЕЗАЕМ ПЕРВЫЙ ПАКЕТ
                 data_mut.truncate(offset + safe_bias);
 
-                // 3. ПРАВИМ ЗАГОЛОВКИ ПЕРВОГО ПАКЕТА
+
                 unsafe {
                     if !ip_header.is_null() {
                         (*ip_header).set_length((data_mut.len() as u16).to_be());
@@ -170,12 +154,11 @@ mod cheburnet {
                 packet.address.set_outbound(true);
                 packet.recalculate_checksums(ChecksumFlags::new()).ok();
 
-                // 4. ПРАВИМ ЗАГОЛОВКИ ВТОРОГО ПАКЕТА
                 {
                     let d2 = packet2.data.to_mut();
 
-                    // Сначала SEQ в TCP (находится по offset + 4)
-                    let mut tcp_offset = 20; // по умолчанию для IPv4
+
+                    let mut tcp_offset = 20;
                     if d2[0] == 0x45 {
                         d2[8] = 121; // TTL
                         let len = d2.len() as u16;
@@ -187,7 +170,6 @@ mod cheburnet {
                         tcp_offset = 40;
                     }
 
-                    // Правим SEQ (он всегда через 4 байта от начала TCP заголовка)
                     let seq_idx = tcp_offset + 4;
                     let mut current_seq = u32::from_be_bytes([d2[seq_idx], d2[seq_idx+1], d2[seq_idx+2], d2[seq_idx+3]]);
                     current_seq += safe_bias as u32;
@@ -207,8 +189,8 @@ mod cheburnet {
                 println!("Packet2 data: {:?}", String::from_utf8_lossy(&packet2.data[offset..packet2.data.len()]));
 
 
-                divert.send(&packet2).ok(); // Сначала второй
-                divert.send(&packet).ok();  // Потом первый
+                divert.send(&packet2).ok();
+                divert.send(&packet).ok();
             }
 
             }
