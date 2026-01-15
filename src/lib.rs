@@ -27,9 +27,12 @@ mod cheburnet {
 
 
         let mut buffer = vec!(0u8; 65535);
-
-
         let domain_bytes = domain.as_bytes();
+
+        let mut blacklist = std::collections::HashSet::new();
+        blacklist.insert("neverssl.com".to_string());
+        blacklist.insert("youtube.com".to_string());
+        blacklist.insert("googlevideo.com".to_string());
 
         println!("Domain: {:?}; Len: {:?}", domain_bytes, domain_bytes.len());
 
@@ -42,23 +45,34 @@ mod cheburnet {
 
             let mut ip_header: *mut WINDIVERT_IPHDR = null_mut();
             let mut ipv6_header: *mut WINDIVERT_IPV6HDR = null_mut();
+            let mut tcp_header: *mut WINDIVERT_TCPHDR = null_mut();
+            let mut payload: *mut c_void = null_mut();
+            let mut payload_len: u32 = 0;
 
             unsafe {
-
                 WinDivertHelperParsePacket(
-                    packet.data.as_ptr() as *const c_void,
-                    packet.data.len() as u32,
-                    &mut ip_header as *mut _ as *mut _,
-                    &mut ipv6_header as *mut _ as *mut _,
+                    packet.data.as_ptr() as *const _, packet.data.len() as u32,
+                    &mut ip_header as *mut _ as *mut _, &mut ipv6_header as *mut _ as *mut _,
                     null_mut(), null_mut(), null_mut(),
-                    null_mut(), // tcp
-                    null_mut(), // udp
-                    null_mut(), // payload
-                    null_mut(), // payload_len
+                    &mut tcp_header as *mut _ as *mut _, null_mut(),
+                    &mut payload as *mut _ as *mut _, &mut payload_len,
                     null_mut(), null_mut(),
                 );
+            }
+
+            if tcp_header.is_null() {
+                    divert.send(&packet).ok();
+                    continue;
+            }
+
+            let base_ptr = packet.data.as_ptr() as usize;
+            let payload_ptr = payload as usize;
+            let offset = payload_ptr - base_ptr;
 
 
+
+
+            unsafe {
                 if !ip_header.is_null() {
                     if (*ip_header).ttl == 121 {
                         divert.send(&packet).ok();
@@ -80,40 +94,40 @@ mod cheburnet {
                 }
             }
 
+            let mut need_fragmentation = false;
+
+            if payload_len > 0 && payload_len < 3000 {
+                let payload_slice = unsafe {
+                    std::slice::from_raw_parts(payload as *const u8, payload_len as usize)
+                };
+
+
+                for domain in &blacklist {
+                    if payload_slice.windows(domain.len()).any(|w| w == domain.as_bytes()) {
+                        need_fragmentation = true;
+                        break;
+                    }
+                }
+            }
+
             let found = packet
                 .data
                 .windows(domain_bytes.len())
                 .any(|w| w == domain_bytes);
 
+
             let mut data_mut = packet.data.to_mut();
 
-            if found {
+            if need_fragmentation {
                 println!("Packet to target ({})", domain);
                 println!("Data len: {:?}", data_mut.len());
 
-                let mut ip_header: *mut WINDIVERT_IPHDR = null_mut();
-                let mut ipv6_header: *mut WINDIVERT_IPV6HDR = null_mut();
-                let mut tcp_header: *mut WINDIVERT_TCPHDR = null_mut();
-                let mut payload: *mut c_void = null_mut();
-                let mut payload_len: u32 = 0;
 
-                unsafe {
-                    WinDivertHelperParsePacket(
-                        data_mut.as_ptr() as *const c_void,
-                        data_mut.len() as u32,
-                        &mut ip_header as *mut _ as *mut _,
-                        &mut ipv6_header as *mut _ as *mut _,
-                        null_mut(), null_mut(), null_mut(),
-                        &mut tcp_header as *mut _ as *mut _,
-                        null_mut(),
-                        &mut payload as *mut _ as *mut _,
-                        &mut payload_len,
-                        null_mut(), null_mut(),
-                    );
-                }
+
+
 
                 if tcp_header.is_null() { continue; }
-                let offset = (payload as usize) - (data_mut.as_ptr() as usize);
+
 
 
                 let safe_bias = if bias == 0 { 1 } else { bias };
@@ -190,6 +204,9 @@ mod cheburnet {
 
 
                 divert.send(&packet2).ok();
+                divert.send(&packet).ok();
+            }
+            else {
                 divert.send(&packet).ok();
             }
 
