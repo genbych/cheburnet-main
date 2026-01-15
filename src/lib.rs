@@ -20,7 +20,7 @@ mod cheburnet {
     fn interception(domain: String, bias: usize) -> PyResult<Vec<u8>> {
 
         let filter = "outbound and tcp.DstPort == 443 and tcp.PayloadLength > 0";
-        let flags = WinDivertFlags::new().set_no_installs();
+        let flags = WinDivertFlags::new();
 
         let divert = WinDivert::network(filter, 0, flags)
             .expect("could not create divert");
