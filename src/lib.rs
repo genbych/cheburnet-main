@@ -4,14 +4,12 @@ use pyo3::prelude::*;
 #[pymodule]
 mod cheburnet {
     use pyo3::prelude::*;
-    use rayon::prelude::*;
     use windivert::prelude::*;
     use windivert_sys::{WinDivertHelperParsePacket};
     use windivert_sys::header::{ WINDIVERT_TCPHDR, WINDIVERT_IPHDR, WINDIVERT_IPV6HDR };
     use windivert_sys::ChecksumFlags;
     use std::ptr::{ null_mut };
     use std::ffi::c_void;
-    use windivert_sys::*;
 
 
 
@@ -74,6 +72,7 @@ mod cheburnet {
 
             unsafe {
                 if !ip_header.is_null() {
+
                     if (*ip_header).ttl == 121 {
                         divert.send(&packet).ok();
                         println!("121");
@@ -110,24 +109,16 @@ mod cheburnet {
                 }
             }
 
-            let found = packet
-                .data
-                .windows(domain_bytes.len())
-                .any(|w| w == domain_bytes);
 
 
-            let mut data_mut = packet.data.to_mut();
+            let data_mut = packet.data.to_mut();
 
             if need_fragmentation {
                 println!("Packet to target ({})", domain);
                 println!("Data len: {:?}", data_mut.len());
 
 
-
-
-
                 if tcp_header.is_null() { continue; }
-
 
 
                 let safe_bias = if bias == 0 { 1 } else { bias };
