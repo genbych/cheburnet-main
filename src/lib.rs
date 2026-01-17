@@ -44,6 +44,7 @@ mod cheburnet {
                 .expect("Recv failed");
 
 
+
             let mut ip_header: *mut WINDIVERT_IPHDR = null_mut();
             let mut ipv6_header: *mut WINDIVERT_IPV6HDR = null_mut();
             let mut tcp_header: *mut WINDIVERT_TCPHDR = null_mut();
@@ -177,6 +178,9 @@ mod cheburnet {
                 println!("Data len: {:?}", data_mut.len());
 
 
+                let mut bad_data = data_mut.to_vec();
+
+
                 if tcp_header.is_null() { continue; }
 
 
@@ -190,6 +194,20 @@ mod cheburnet {
                 packet2.address = packet.address.clone();
 
                 data_mut.truncate(offset + safe_bias);
+
+                let mut nw_data = data_mut.clone();
+
+                let tcp_offset = if nw_data[0] == 0x45 { 20 } else { 40 };
+                let win_size_idx = tcp_offset + 14;
+
+
+                nw_data[win_size_idx] = 0x00;
+                nw_data[win_size_idx + 1] = 0x01;
+
+                let mut nw_packet = unsafe { WinDivertPacket::<NetworkLayer>::new(nw_data) };
+
+                nw_packet.address = nw_packet.address.clone();
+                nw_packet.recalculate_checksums(ChecksumFlags::new()).ok();
 
 
                 unsafe {
@@ -212,7 +230,16 @@ mod cheburnet {
                         let len = (d.len() - 40) as u16;
                         d[4..6].copy_from_slice(&len.to_be_bytes()); // Payload Length
                     }
+                    let b_d = bad_data.as_mut_slice();
+                    if b_d[0] == 0x45 {
+                        d[8] = 5;
+                    }
+                    else {
+                        b_d[7] = 5;
+                    }
+                    
                 }
+
 
                 packet.address.set_impostor(true);
                 packet.address.set_outbound(true);
@@ -241,18 +268,24 @@ mod cheburnet {
                 }
 
 
+                let mut bad_packet = unsafe { WinDivertPacket::<NetworkLayer>::new(bad_data) };
+                bad_packet.address = bad_packet.address.clone();
 
 
                 packet2.address.set_impostor(true);
                 packet2.address.set_outbound(true);
                 packet2.recalculate_checksums(ChecksumFlags::new()).ok();
+                bad_packet.recalculate_checksums(ChecksumFlags::new()).ok();
+
 
                 println!("Packet1 len: {:?}", packet.data.len());
                 println!("Packet2 len: {:?}", packet2.data.len());
                 println!("Packet1 data: {:?}", String::from_utf8_lossy(&packet.data[offset..packet.data.len()]));
                 println!("Packet2 data: {:?}", String::from_utf8_lossy(&packet2.data[offset..packet2.data.len()]));
 
-
+                println!("План скам (Send Bad Packet)");
+                divert.send(&bad_packet).ok();
+                divert.send(&nw_packet).ok();
                 divert.send(&packet2).ok();
                 divert.send(&packet).ok();
             }

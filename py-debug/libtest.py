@@ -1,5 +1,7 @@
 import os
 import sys
+from art import tprint
+
 
 
 dll_path = os.path.abspath("./lib")
