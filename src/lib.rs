@@ -32,6 +32,9 @@ mod cheburnet {
         blacklist.insert("youtube.com".to_string());
         blacklist.insert("googlevideo.com".to_string());
 
+        let mut blocklist = std::collections::HashSet::new();
+        blocklist.insert("max.ru".to_string());
+
         println!("Domain: {:?}; Len: {:?}", domain_bytes, domain_bytes.len());
 
 
@@ -109,9 +112,65 @@ mod cheburnet {
                 }
             }
 
+            let mut is_blocked = false;
+
+            for domain in &blocklist {
+                is_blocked = packet.data.windows(domain.len()).any(|w| w == domain.as_bytes());
+                if is_blocked {
+                    println!("{} у нас в бане (иди нахуй)", domain);
+                }
+            }
+
+
 
 
             let data_mut = packet.data.to_mut();
+
+            if is_blocked {
+
+                let mut rst_data = packet.data.to_vec();
+
+                unsafe {
+                    let mut ip_header: *mut WINDIVERT_IPHDR = null_mut();
+                    let mut tcp_header: *mut WINDIVERT_TCPHDR = null_mut();
+
+                    WinDivertHelperParsePacket(
+                        rst_data.as_ptr() as *const _, rst_data.len() as u32,
+                        &mut ip_header as *mut _ as *mut _, null_mut(), null_mut(), null_mut(), null_mut(),
+                        &mut tcp_header as *mut _ as *mut _, null_mut(), null_mut(), null_mut(), null_mut(), null_mut()
+                    );
+
+                    if !ip_header.is_null() && !tcp_header.is_null() {
+                        let src = (*ip_header).src_addr();
+                        (*ip_header).set_src_addr((*ip_header).dst_addr());
+                        (*ip_header).set_dst_addr(src);
+
+                        let src_p = (*tcp_header).src_port();
+                        (*tcp_header).set_src_port((*tcp_header).dst_port());
+                        (*tcp_header).set_dst_port(src_p);
+
+                        (*tcp_header).set_RST(1);
+                        (*tcp_header).set_ACK(1);
+
+                        let incoming_ack = (*tcp_header).ACK_number();
+                        (*tcp_header).set_seq_number(incoming_ack);
+
+                    }
+
+                    let mut rst_packet = unsafe { WinDivertPacket::<NetworkLayer>::new(rst_data) };
+
+
+                    rst_packet.address.set_outbound(false);
+                    rst_packet.address.set_impostor(true);
+                    rst_packet.recalculate_checksums(ChecksumFlags::new()).ok();
+
+
+                    divert.send(&rst_packet).ok();
+
+
+                    continue;
+                }
+            }
 
             if need_fragmentation {
                 println!("Packet to target ({})", domain);
