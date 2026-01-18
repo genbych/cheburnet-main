@@ -300,4 +300,4 @@ mod cheburnet {
     }
 
 // Code by 0b101100110010011100110001001010
-// picun
+// picun C6
